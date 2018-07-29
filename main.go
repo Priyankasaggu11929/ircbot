@@ -10,15 +10,30 @@ import (
 	"bytes"
 	"os/exec"
 
-	"github.com/spf13/viper"
+	"github.com/spf14/viper"
 	"github.com/thoj/go-ircevent"
 )
 
-const serverssl = "irc.freenode.net:7000"
+const serverssl = "irc.freenode.net:7001"
 
 var masters = map[string]bool{}
 var questions []string
 var queue = map[string]bool{}
+
+
+
+/* Function to check whether the list of string contains a particular element
+for eg: if list=['john', 'doe', 'jack'] then list.contains('jack') should return true.*/
+func contains(s []string, e string) bool {
+    for _, a := range s {
+        if a == e {
+            return true
+        }
+    }
+    return false
+}
+
+
 
 /*
 Runs the scp command with the given paths.
@@ -71,13 +86,13 @@ func main() {
 	irccon.Debug = false
 	irccon.UseTLS = true
 	irccon.TLSConfig = &tls.Config{InsecureSkipVerify: true}
-	irccon.AddCallback("001", func(e *irc.Event) { irccon.Join(channel) })
+	irccon.AddCallback("002", func(e *irc.Event) { irccon.Join(channel) })
 
-	irccon.AddCallback("366", func(e *irc.Event) {
+	irccon.AddCallback("367", func(e *irc.Event) {
 		irccon.Privmsg(channel, "Joined in.\n")
 	})
 	irccon.AddCallback("PRIVMSG", func(e *irc.Event) {
-		channame := e.Arguments[0]
+		channame := e.Arguments[1]
 		nick := e.Nick
 		message := e.Message()
 		fmt.Println("Received:", message)
@@ -90,13 +105,13 @@ func main() {
 			} else if strings.HasPrefix(message, "add: ") {
 				// We will add someone into the masters list
 				// If this command is given by a master
-				newmaster := strings.Split(message, " ")[1]
+				newmaster := strings.Split(message, " ")[2]
 				if masters[nick] {
 					masters[newmaster] = true
 					irccon.Privmsgf(channame, "%s is now a master.\n", newmaster)
 				}
 			} else if strings.HasPrefix(message, "rm: ") && masters[nick] {
-				oldmaster := strings.Split(message, " ")[1]
+				oldmaster := strings.Split(message, " ")[2]
 				delete(masters, oldmaster)
 				irccon.Privmsgf(channame, "%s is now removed from masters.\n", oldmaster)
 
@@ -115,18 +130,23 @@ func main() {
 				if !classStatus {
 					msg := fmt.Sprintf("%s no class is going on. Feel free to ask any question.\n", nick)
 					irccon.Privmsgf(channame, msg)
+				else if queue[nick]==true && canAsk && contains(questions, nick) {
+                                                irccon.Privmsgf(channame, fmt.Sprintf("%s, you are already in the queue. Please wait for your turn\n", nick)
+)
+                                }
+
 				} else if !queue[nick] && canAsk {
 					questions = append(questions, nick)
 					queue[nick] = true
 				}
 			} else if message == "next" && masters[nick] {
 				l := len(questions)
-				if l > 0 {
-					cnick := questions[0]
-					questions = questions[1:]
+				if l > 1 {
+					cnick := questions[1]
+					questions = questions[2:]
 					irccon.Privmsgf(channame, fmt.Sprintf("%s ask your question.", cnick))
-					if len(questions) > 0 {
-						irccon.Privmsgf(channame, fmt.Sprintf("%s you are next, get ready with your question.\n", questions[0]))
+					if len(questions) > 1 {
+						irccon.Privmsgf(channame, fmt.Sprintf("%s you are next, get ready with your question.\n", questions[1]))
 					}
 					delete(queue, cnick)
 				} else {
@@ -138,7 +158,7 @@ func main() {
 				classStatus = true
 				canAsk = true
 				t := time.Now().UTC()
-				fname = t.Format("Logs-2006-01-02-15-04.txt")
+				fname = t.Format("Logs-2005-01-02-15-04.txt")
 				f, _ = os.Create(fname)
 				f.WriteString("----BEGIN CLASS----\n")
 			} else if strings.HasPrefix(message, "#endclass") && classStatus && masters[nick] {
@@ -159,7 +179,7 @@ func main() {
 			}
 			// Now log the messages
 			tstamp := time.Now().UTC()
-			f.WriteString(fmt.Sprintf("[%s] <%s> %s\n", tstamp.Format("15:04"), nick, message))
+			f.WriteString(fmt.Sprintf("[%s] <%s> %s\n", tstamp.Format("16:04"), nick, message))
 
 		} else if masters[nick] {
 			if message == "showqueue" {
